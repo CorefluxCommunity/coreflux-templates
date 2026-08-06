@@ -1,0 +1,42 @@
+[
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "# Edge to Cloud Broker Bridge — simulator\n\nRun this notebook on the **edge broker** after deploying the solution Models and Actions. It is an independent hardware-free data source: it shares only MQTT topics with the solution and uses no definitions from another notebook.\n\nDo not run this notebook in production. Real ingress must publish the same raw topic and payload contract.\n\n## Scenario and cadence\n\nTwo hall-A machines publish telemetry every 5 seconds and state every 10 seconds. Temperatures follow bounded random walks. Periodic spikes above 85 °C make the solution's alert observable within about 2.5 minutes. States cycle through running, idle, and fault.\n\n## Raw topic contract\n\n| Topic pattern | Payload |\n|---|---|\n| `raw/factory/hall-a/<machine>/id` | `machine1` or `machine2` string |\n| `raw/factory/hall-a/<machine>/temperature` | scalar °C number |\n| `raw/factory/hall-a/<machine>/state` | `running`, `idle`, or `fault` string |\n\nInternal state is retained only under `sim/hall-a/...`."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimHallAMachine1Telemetry\nON EVERY 5 SECONDS DO\n    // SIMULATOR\n    SET \"prev\" WITH (GET TOPIC \"sim/hall-a/machine1/temp_prev\" AS DOUBLE)\n    IF {prev} == EMPTY THEN\n        SET \"prev\" WITH 55.0\n    SET \"tick\" WITH (GET TOPIC \"sim/hall-a/machine1/tick\" AS INT)\n    IF {tick} == EMPTY THEN\n        SET \"tick\" WITH 0\n    SET \"tick\" WITH ({tick} + 1)\n    SET \"delta\" WITH (RANDOM DOUBLE BETWEEN -2.0 AND 2.0)\n    SET \"temperature\" WITH ({prev} + {delta})\n    IF {temperature} < 35.0 THEN\n        SET \"temperature\" WITH 35.0\n    IF {temperature} > 80.0 THEN\n        SET \"temperature\" WITH 80.0\n    IF {tick} >= 24 THEN\n        SET \"temperature\" WITH (RANDOM DOUBLE BETWEEN 88.0 AND 95.0)\n        SET \"tick\" WITH 0\n    KEEP TOPIC \"sim/hall-a/machine1/temp_prev\" WITH {temperature}\n    KEEP TOPIC \"sim/hall-a/machine1/tick\" WITH {tick}\n    PUBLISH TOPIC \"raw/factory/hall-a/machine1/id\" WITH \"machine1\"\n    PUBLISH TOPIC \"raw/factory/hall-a/machine1/temperature\" WITH {temperature}"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Machine 1 state machine (dwell on running, short idle, short fault).\n\n**Writes:** `raw/factory/hall-a/machine1/state`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimHallAMachine1State\nON EVERY 10 SECONDS DO\n    // SIMULATOR\n    SET \"phase\" WITH (GET TOPIC \"sim/hall-a/machine1/phase\" AS INT)\n    IF {phase} == EMPTY THEN\n        SET \"phase\" WITH 0\n    SET \"phase\" WITH ({phase} + 1)\n    IF {phase} <= 6 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine1/state\" WITH \"running\"\n    ELSE IF {phase} <= 9 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine1/state\" WITH \"idle\"\n    ELSE IF {phase} <= 11 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine1/state\" WITH \"fault\"\n    ELSE\n        SET \"phase\" WITH 0\n        PUBLISH TOPIC \"raw/factory/hall-a/machine1/state\" WITH \"running\"\n    KEEP TOPIC \"sim/hall-a/machine1/phase\" WITH {phase}"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Machine 2 telemetry (slightly cooler band, independent anomaly cadence).\n\n**Writes:** `raw/factory/hall-a/machine2/{id,temperature}`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimHallAMachine2Telemetry\nON EVERY 5 SECONDS DO\n    // SIMULATOR\n    SET \"prev\" WITH (GET TOPIC \"sim/hall-a/machine2/temp_prev\" AS DOUBLE)\n    IF {prev} == EMPTY THEN\n        SET \"prev\" WITH 48.0\n    SET \"tick\" WITH (GET TOPIC \"sim/hall-a/machine2/tick\" AS INT)\n    IF {tick} == EMPTY THEN\n        SET \"tick\" WITH 0\n    SET \"tick\" WITH ({tick} + 1)\n    SET \"delta\" WITH (RANDOM DOUBLE BETWEEN -1.5 AND 1.5)\n    SET \"temperature\" WITH ({prev} + {delta})\n    IF {temperature} < 30.0 THEN\n        SET \"temperature\" WITH 30.0\n    IF {temperature} > 75.0 THEN\n        SET \"temperature\" WITH 75.0\n    IF {tick} >= 30 THEN\n        SET \"temperature\" WITH (RANDOM DOUBLE BETWEEN 86.0 AND 92.0)\n        SET \"tick\" WITH 0\n    KEEP TOPIC \"sim/hall-a/machine2/temp_prev\" WITH {temperature}\n    KEEP TOPIC \"sim/hall-a/machine2/tick\" WITH {tick}\n    PUBLISH TOPIC \"raw/factory/hall-a/machine2/id\" WITH \"machine2\"\n    PUBLISH TOPIC \"raw/factory/hall-a/machine2/temperature\" WITH {temperature}"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Machine 2 state cycle (offset dwell so both machines are not always in the same state).\n\n**Writes:** `raw/factory/hall-a/machine2/state`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimHallAMachine2State\nON EVERY 10 SECONDS DO\n    // SIMULATOR\n    SET \"phase\" WITH (GET TOPIC \"sim/hall-a/machine2/phase\" AS INT)\n    IF {phase} == EMPTY THEN\n        SET \"phase\" WITH 3\n    SET \"phase\" WITH ({phase} + 1)\n    IF {phase} <= 5 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine2/state\" WITH \"running\"\n    ELSE IF {phase} <= 8 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine2/state\" WITH \"idle\"\n    ELSE IF {phase} <= 10 THEN\n        PUBLISH TOPIC \"raw/factory/hall-a/machine2/state\" WITH \"fault\"\n    ELSE\n        SET \"phase\" WITH 0\n        PUBLISH TOPIC \"raw/factory/hall-a/machine2/state\" WITH \"running\"\n    KEEP TOPIC \"sim/hall-a/machine2/phase\" WITH {phase}"
+  }
+]

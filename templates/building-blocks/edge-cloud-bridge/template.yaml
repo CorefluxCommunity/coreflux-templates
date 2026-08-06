@@ -1,0 +1,19 @@
+id: edge-cloud-bridge
+title: Edge to Cloud Broker Bridge
+category: building-blocks
+difficulty: advanced
+primitives: [model, action, route, rule]
+protocols: [mqtt-bridge]
+services: [coreflux-edge, coreflux-cloud]
+hardware_free: true
+est_minutes_to_deploy: 15
+verified_broker_version: "2.2"
+summary: >
+  Federate an edge Coreflux broker to a cloud broker with an MQTT Bridge Route,
+  site-prefixed topic remap, and cloud-side Rules that keep each site in its own
+  subtree. Separate solution, simulator, and production TLS notebooks keep demo and
+  deployment concerns easy to understand.
+notebooks:
+  solution: edge-cloud-bridge.lotnb
+  simulator: edge-cloud-bridge-simulator.lotnb
+  production: edge-cloud-bridge-production.lotnb

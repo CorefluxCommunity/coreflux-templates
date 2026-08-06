@@ -1,0 +1,43 @@
+# Two Coreflux brokers for a local edge ↔ cloud demo.
+# Pin: coreflux/coreflux-mqtt-broker:2.2.0 (matches Docker Hub as of 2026-07-28).
+#
+# Licensing: official install docs describe Docker and cloud trial for a broker
+# instance. They do not document a multi-instance trial entitlement. Confirm your
+# Coreflux license before using two brokers outside a local architecture demo.
+
+services:
+  coreflux-edge:
+    image: coreflux/coreflux-mqtt-broker:2.2.0
+    container_name: coreflux-edge
+    ports:
+      - "1883:1883"
+      - "5000:5000"
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - coreflux_edge_project:/etc/project
+    restart: unless-stopped
+    networks:
+      - edge_cloud
+
+  coreflux-cloud:
+    image: coreflux/coreflux-mqtt-broker:2.2.0
+    container_name: coreflux-cloud
+    ports:
+      - "1884:1883"
+      - "5001:5000"
+      - "8081:8080"
+      - "8444:8443"
+    volumes:
+      - coreflux_cloud_project:/etc/project
+    restart: unless-stopped
+    networks:
+      - edge_cloud
+
+volumes:
+  coreflux_edge_project:
+  coreflux_cloud_project:
+
+networks:
+  edge_cloud:
+    driver: bridge
