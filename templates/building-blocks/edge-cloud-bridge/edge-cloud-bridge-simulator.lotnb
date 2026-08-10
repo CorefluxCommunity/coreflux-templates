@@ -2,7 +2,12 @@
   {
     "kind": 1,
     "language": "markdown",
-    "value": "# Edge to Cloud Broker Bridge — simulator\n\nRun this notebook on the **edge broker** after deploying the solution Models and Actions. It is an independent hardware-free data source: it shares only MQTT topics with the solution and uses no definitions from another notebook.\n\nDo not run this notebook in production. Real ingress must publish the same raw topic and payload contract.\n\n## Scenario and cadence\n\nTwo hall-A machines publish telemetry every 5 seconds and state every 10 seconds. Temperatures follow bounded random walks. Periodic spikes above 85 °C make the solution's alert observable within about 2.5 minutes. States cycle through running, idle, and fault.\n\n## Raw topic contract\n\n| Topic pattern | Payload |\n|---|---|\n| `raw/factory/hall-a/<machine>/id` | `machine1` or `machine2` string |\n| `raw/factory/hall-a/<machine>/temperature` | scalar °C number |\n| `raw/factory/hall-a/<machine>/state` | `running`, `idle`, or `fault` string |\n\nInternal state is retained only under `sim/hall-a/...`."
+    "value": "# Edge to Cloud Broker Bridge — simulator\n\n**Target broker:** edge (`localhost:1883` with Compose).\n\nRun this notebook after deploying the solution Models and Actions. It is an independent hardware-free data source: it shares only MQTT topics with the solution and uses no definitions from another notebook.\n\nDo not run this notebook in production (see README Production readiness). Real ingress must publish the same raw topic and payload contract.\n\n## Scenario and cadence\n\nTwo hall-A machines publish telemetry every 5 seconds and state every 10 seconds (~0.6 msg/s total). Temperatures follow bounded random walks. Periodic spikes above 85 °C make the solution's alert observable within about 2.5 minutes. States cycle through running, idle, and fault.\n\n## Raw topic contract\n\n| Topic pattern | Payload |\n|---|---|\n| `raw/factory/hall-a/<machine>/id` | `machine1` or `machine2` string |\n| `raw/factory/hall-a/<machine>/temperature` | scalar °C number |\n| `raw/factory/hall-a/<machine>/state` | `running`, `idle`, or `fault` string |\n\nInternal simulator state is retained only under `sim/hall-a/...` (not bridged)."
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Machine 1 temperature walk with periodic over-threshold spikes.\n\n**Reads:** `sim/hall-a/machine1/{temp_prev,tick}`  \n**Writes:** `raw/factory/hall-a/machine1/{id,temperature}` and retained `sim/hall-a/machine1/{temp_prev,tick}`"
   },
   {
     "kind": 2,
@@ -12,7 +17,7 @@
   {
     "kind": 1,
     "language": "markdown",
-    "value": "Machine 1 state machine (dwell on running, short idle, short fault).\n\n**Writes:** `raw/factory/hall-a/machine1/state`"
+    "value": "Machine 1 state machine (dwell on running, short idle, short fault).\n\n**Reads:** `sim/hall-a/machine1/phase`  \n**Writes:** `raw/factory/hall-a/machine1/state` and retained `sim/hall-a/machine1/phase`"
   },
   {
     "kind": 2,
@@ -22,7 +27,7 @@
   {
     "kind": 1,
     "language": "markdown",
-    "value": "Machine 2 telemetry (slightly cooler band, independent anomaly cadence).\n\n**Writes:** `raw/factory/hall-a/machine2/{id,temperature}`"
+    "value": "Machine 2 telemetry (slightly cooler band, independent anomaly cadence).\n\n**Reads:** `sim/hall-a/machine2/{temp_prev,tick}`  \n**Writes:** `raw/factory/hall-a/machine2/{id,temperature}` and retained `sim/hall-a/machine2/{temp_prev,tick}`"
   },
   {
     "kind": 2,
@@ -32,7 +37,7 @@
   {
     "kind": 1,
     "language": "markdown",
-    "value": "Machine 2 state cycle (offset dwell so both machines are not always in the same state).\n\n**Writes:** `raw/factory/hall-a/machine2/state`"
+    "value": "Machine 2 state cycle (offset dwell so both machines are not always in the same state).\n\n**Reads:** `sim/hall-a/machine2/phase`  \n**Writes:** `raw/factory/hall-a/machine2/state` and retained `sim/hall-a/machine2/phase`"
   },
   {
     "kind": 2,

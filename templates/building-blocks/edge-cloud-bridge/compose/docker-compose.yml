@@ -1,9 +1,13 @@
-# Two Coreflux brokers for a local edge ↔ cloud demo.
+# Two Coreflux brokers for a local edge / cloud demo.
 # Pin: coreflux/coreflux-mqtt-broker:2.2.0 (matches Docker Hub as of 2026-07-28).
 #
 # Licensing: official install docs describe Docker and cloud trial for a broker
 # instance. They do not document a multi-instance trial entitlement. Confirm your
 # Coreflux license before using two brokers outside a local architecture demo.
+#
+# Pull-the-cable test (from README): docker compose pause coreflux-cloud
+# then docker compose unpause coreflux-cloud. Expect reconnect retries, not
+# documented store-and-forward catch-up.
 
 services:
   coreflux-edge:
