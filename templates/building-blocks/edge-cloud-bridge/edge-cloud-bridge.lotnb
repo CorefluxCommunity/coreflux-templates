@@ -1,0 +1,87 @@
+[
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "# Edge to Cloud Broker Bridge — solution\n\nDeploy the clean UNS, edge alert, local demo bridge, and cloud access Rules. Simulation is intentionally separate so production users never need to delete demo code.\n\n## Included execution targets\n\n| Section | Run against |\n|---|---|\n| Models and Actions | **Edge** broker (`localhost:1883` with Compose) |\n| Demo Route | **Edge** broker, after creating the cloud bridge user |\n| Rules | **Cloud** broker (`localhost:1884` with Compose) |\n\nFor the hardware-free demo, run this notebook's edge Models and Actions, run `edge-cloud-bridge-simulator.lotnb` on the edge, enable the demo Route, then apply the cloud Rules. The README gives the exact sequence.\n\nFor production, do not run the simulator. Apply cloud Rules first, deploy the edge Models and Actions, then use `edge-cloud-bridge-production.lotnb` instead of the local demo Route.\n\n## Architecture\n\n```\nraw/factory/... → Models → factory/... (clean UNS) → alert Action\n                                      ↓\n                         MQTT_BRIDGE (DIRECTION out)\n                                      ↓\n                    sites/site-plant/factory/... (cloud)\n```"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "## Models\n\nMap raw hall-A machine signals into clean UNS JSON under `factory/hall-a/<machine>/reading`. The bridge later prefixes this subtree to `sites/site-plant/...`.\n\n**Reads:** `raw/factory/hall-a/machine1/{temperature,state,id}`  \n**Writes:** `factory/hall-a/machine1/reading`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE MODEL HallAMachine1Reading WITH TOPIC \"factory/hall-a/machine1/reading\"\n    ADD STRING \"site_id\" WITH \"site-plant\"\n    ADD STRING \"area\" WITH \"hall-a\"\n    ADD STRING \"machine_id\" WITH TOPIC \"raw/factory/hall-a/machine1/id\"\n    ADD DOUBLE \"temperature\" WITH TOPIC \"raw/factory/hall-a/machine1/temperature\" AS TRIGGER\n    ADD STRING \"state\" WITH TOPIC \"raw/factory/hall-a/machine1/state\"\n    ADD STRING \"unit\" WITH \"celsius\"\n    ADD STRING \"timestamp\" WITH TIMESTAMP \"UTC\""
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Same raw→clean mapping for machine 2 so the bridge and cloud Rules see more than one device.\n\n**Reads:** `raw/factory/hall-a/machine2/{temperature,state,id}`  \n**Writes:** `factory/hall-a/machine2/reading`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE MODEL HallAMachine2Reading WITH TOPIC \"factory/hall-a/machine2/reading\"\n    ADD STRING \"site_id\" WITH \"site-plant\"\n    ADD STRING \"area\" WITH \"hall-a\"\n    ADD STRING \"machine_id\" WITH TOPIC \"raw/factory/hall-a/machine2/id\"\n    ADD DOUBLE \"temperature\" WITH TOPIC \"raw/factory/hall-a/machine2/temperature\" AS TRIGGER\n    ADD STRING \"state\" WITH TOPIC \"raw/factory/hall-a/machine2/state\"\n    ADD STRING \"unit\" WITH \"celsius\"\n    ADD STRING \"timestamp\" WITH TIMESTAMP \"UTC\""
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "## Actions\n\nEdge-side high-temperature alert so a 5-minute demo has something observable before you look at the cloud topics. Threshold: **85 °C**.\n\n**Reads:** `factory/hall-a/+/reading`  \n**Writes:** `factory/hall-a/<machine>/alert/high_temp`"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION HallAHighTempAlert\nON TOPIC \"factory/hall-a/+/reading\" DO\n    SET \"machine_id\" WITH TOPIC POSITION 3\n    SET \"temperature\" WITH (GET JSON \"temperature\" IN PAYLOAD AS DOUBLE)\n    IF {temperature} > 85 THEN\n        PUBLISH TOPIC \"factory/hall-a/\" + {machine_id} + \"/alert/high_temp\" WITH (\"High temperature on \" + {machine_id} + \": \" + {temperature} + \" C\")"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "## Routes\n\n> **Requires a reachable cloud broker.** Safe to skip while you only validate the Simulator + Models on the edge. With Compose, the cloud service hostname is `coreflux-cloud` on port `1883` inside the Docker network (host port `1884`).\n\nCreates the edge→cloud MQTT Bridge: forwards clean UNS `factory/#` to `sites/site-plant/factory/#` with `DIRECTION \"out\"`. Replace `USERNAME` / `PASSWORD` with the cloud bridge user you create (`-addUser`). Raise `RECONNECTION_RETRIES` if your WAN is flaky — that is the documented resilience knob."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ROUTE EdgeToCloudBridge WITH TYPE MQTT_BRIDGE\n    ADD SOURCE_CONFIG\n        WITH BROKER SELF\n    ADD DESTINATION_CONFIG\n        WITH BROKER_ADDRESS \"coreflux-cloud\"\n        WITH BROKER_PORT '1883'\n        WITH CLIENT_ID \"edge-site-plant-bridge\"\n        WITH USERNAME \"bridge_site_plant\"\n        WITH PASSWORD \"CHANGE_ME_BRIDGE_PASSWORD\"\n        WITH USE_TLS \"false\"\n        WITH RECONNECTION_RETRIES '20'\n    ADD MAPPING siteFactoryOut\n        WITH SOURCE_TOPIC \"factory/#\"\n        WITH DESTINATION_TOPIC \"sites/site-plant/factory/#\"\n        WITH DIRECTION \"out\""
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "## Rules\n\n**Run these cells on the cloud broker only.**\n\nNotebook order puts Rules last on purpose: a deny-by-default set applied mid-notebook on the edge could lock the deploying identity out of remaining cells. In production, deploy cloud Rules **before** enabling the edge bridge.\n\nMid-session effect of new Rules on already-connected clients is not fully documented; treat as applying to subsequent publish/subscribe operations and re-test after deploy.\n\n### User story: site bridge publisher\n\n`bridge_site_plant` may publish under `sites/site-plant/#` and is denied under the broader `sites/#` tree (so it cannot write another site's namespace). Create the user on the cloud broker first: publish `-addUser bridge_site_plant <password>` to `$SYS/Coreflux/Command`."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE RULE AllowSitePlantBridgePublish WITH PRIORITY 20 FOR Publish TO TOPIC \"sites/site-plant/#\"\n    IF USER IS \"bridge_site_plant\" OR USER IS \"root\" THEN\n        ALLOW\n    ELSE\n        DENY"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Deny the site-plant bridge user from publishing anywhere else under `sites/#`. Priority **30** (lower precedence than the allow above) so `sites/site-plant/...` still matches the allow rule first."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE RULE DenySitePlantBridgeOutsideSite WITH PRIORITY 30 FOR Publish TO TOPIC \"sites/#\"\n    IF USER IS \"bridge_site_plant\" THEN\n        DENY\n    ELSE\n        ALLOW"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "### User story: read-only site dashboard\n\n`dashboard_site` may subscribe to the site subtree but must not publish into it. Create the user with `-addUser dashboard_site <password>` on the cloud broker.\n\nSubscribe allow (priority 20), then an explicit publish deny at priority **15** (evaluated before the bridge publish allow) with no ELSE so non-dashboard users fall through to the site publish rules above."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE RULE AllowSiteDashboardSubscribe WITH PRIORITY 20 FOR Subscribe TO TOPIC \"sites/site-plant/#\"\n    IF USER IS \"dashboard_site\" OR USER IS \"root\" OR USER IS \"bridge_site_plant\" THEN\n        ALLOW\n    ELSE\n        DENY"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Deny publishes from the dashboard user into the site tree (priority 15, deny-only when the user matches)."
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE RULE DenySiteDashboardPublish WITH PRIORITY 15 FOR Publish TO TOPIC \"sites/site-plant/#\"\n    IF USER IS \"dashboard_site\" THEN\n        DENY"
+  }
+]
