@@ -1,0 +1,27 @@
+[
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "# Secure Your UNS in 11 Rules — simulator\n\n**Target broker:** the same broker as the solution notebook (for example `localhost:1883`).\n\nRun this notebook **after** the solution Model and raw-to-clean Action (and preferably after Rules). It is an independent hardware-free data source: it shares only MQTT topics with the solution and uses no definitions from another notebook.\n\nDo not run this notebook in production (see README Production readiness).\n\n## Scenario and cadence\n\nDevice-x and device-y publish bounded temperature walks every 5 seconds onto the same `raw/...` topics real device MQTT clients would use, including live `temperature_EU` metadata. The two instances demonstrate that one wildcard Action creates clean readings for every matching line and device. These simulator Actions are not `device_x`; they run inside the broker. Broker entities are not subject to `Publish` Rules (verified on 2.14.3-rc.62), so raw traffic keeps flowing after the solution's deny-by-default Rules deploy. Rules constrain MQTT **clients**, which is what the negative tests exercise.\n\nRole-based DENY outcomes are exercised in Coreflux HUB Data Viewer as MQTT clients (`dashboard`, `device_x`, `engineer`), not by these simulator Actions.\n\nThere is no threshold Action in the solution, so this simulator does not inject an out-of-band spike.\n\n## Raw topic contract\n\n| Topic | Payload | Retained |\n|---|---|---|\n| `raw/factory/line1/device-x/id` | `device-x` | yes (`KEEP`) |\n| `raw/factory/line1/device-x/temperature` | scalar °C number | no (`PUBLISH`) |\n| `raw/factory/line1/device-x/temperature_EU` | `celsius` | yes (`KEEP`) |\n| `raw/factory/line1/device-y/id` | `device-y` | yes (`KEEP`) |\n| `raw/factory/line1/device-y/temperature` | scalar °C number | no (`PUBLISH`) |\n| `raw/factory/line1/device-y/temperature_EU` | `celsius` | yes (`KEEP`) |\n\nMeasurements are non-retained because each reading supersedes the last. Identity and engineering-unit metadata use `KEEP TOPIC` so they are retained state: the solution's Action reads `temperature_EU` with `GET TOPIC`, which resolves retained values, and a real device would likewise publish its metadata retained rather than relying on a subscriber being connected at the right moment.\n\nInternal simulator state is retained only under `sim/factory/line1/...`.\n"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Device-x temperature walk (allowed ingress path for the Model).\n\n**Reads:** `sim/factory/line1/device-x/temp_prev`\n**Writes:** non-retained `raw/factory/line1/device-x/temperature`; retained `raw/factory/line1/device-x/{id,temperature_EU}` and `sim/factory/line1/device-x/temp_prev`\n"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimDeviceXTelemetry\nON EVERY 5 SECONDS DO\n    // SIMULATOR\n    SET \"prev\" WITH (GET TOPIC \"sim/factory/line1/device-x/temp_prev\" AS DOUBLE)\n    IF {prev} == EMPTY THEN\n        SET \"prev\" WITH 42.0\n    SET \"delta\" WITH (RANDOM DOUBLE BETWEEN -1.5 AND 1.5)\n    SET \"temperature\" WITH ({prev} + {delta})\n    IF {temperature} < 20.0 THEN\n        SET \"temperature\" WITH 20.0\n    IF {temperature} > 70.0 THEN\n        SET \"temperature\" WITH 70.0\n    KEEP TOPIC \"sim/factory/line1/device-x/temp_prev\" WITH {temperature}\n    KEEP TOPIC \"raw/factory/line1/device-x/id\" WITH \"device-x\"\n    KEEP TOPIC \"raw/factory/line1/device-x/temperature_EU\" WITH \"celsius\"\n    PUBLISH TOPIC \"raw/factory/line1/device-x/temperature\" WITH {temperature}"
+  },
+  {
+    "kind": 1,
+    "language": "markdown",
+    "value": "Second device under the same line. The same wildcard raw-to-clean Action handles it without another Model or Action in the solution.\n\n**Reads:** `sim/factory/line1/device-y/temp_prev`\n**Writes:** non-retained `raw/factory/line1/device-y/temperature`; retained `raw/factory/line1/device-y/{id,temperature_EU}` and `sim/factory/line1/device-y/temp_prev`\n"
+  },
+  {
+    "kind": 2,
+    "language": "lot",
+    "value": "DEFINE ACTION SimDeviceYTelemetry\nON EVERY 5 SECONDS DO\n    // SIMULATOR\n    SET \"prev\" WITH (GET TOPIC \"sim/factory/line1/device-y/temp_prev\" AS DOUBLE)\n    IF {prev} == EMPTY THEN\n        SET \"prev\" WITH 38.0\n    SET \"delta\" WITH (RANDOM DOUBLE BETWEEN -1.0 AND 1.0)\n    SET \"temperature\" WITH ({prev} + {delta})\n    IF {temperature} < 18.0 THEN\n        SET \"temperature\" WITH 18.0\n    IF {temperature} > 65.0 THEN\n        SET \"temperature\" WITH 65.0\n    KEEP TOPIC \"sim/factory/line1/device-y/temp_prev\" WITH {temperature}\n    KEEP TOPIC \"raw/factory/line1/device-y/id\" WITH \"device-y\"\n    KEEP TOPIC \"raw/factory/line1/device-y/temperature_EU\" WITH \"celsius\"\n    PUBLISH TOPIC \"raw/factory/line1/device-y/temperature\" WITH {temperature}"
+  }
+]

@@ -1,0 +1,28 @@
+# Single Coreflux broker for testing the UNS security Rules locally.
+# Pin: coreflux/coreflux-mqtt-broker:2.14.3 (Docker Hub, 2026-08-26).
+# Use the full image, not *-distroless.
+#
+# Quick start:
+#   docker compose up -d
+#   MQTT on localhost:1883, HUB on http://localhost:8080
+# Change the default broker credentials before exposing any port beyond localhost.
+
+# Project name so Docker groups these resources under the template id instead of
+# the parent folder name ("compose").
+name: uns-security-starter
+
+services:
+  coreflux-broker:
+    image: coreflux/coreflux-mqtt-broker:2.14.3
+    container_name: uns-security-starter-broker
+    ports:
+      - "1883:1883"
+      - "5000:5000"
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - coreflux_project:/etc/project
+    restart: unless-stopped
+
+volumes:
+  coreflux_project:
