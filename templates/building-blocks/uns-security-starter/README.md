@@ -36,16 +36,16 @@ flowchart LR
 
 ## Infrastructure and assets
 
-This template folder includes `compose/docker-compose.yml`, a single Coreflux broker for testing the Rules locally (MQTT on `localhost:1883`, HUB on `http://localhost:8080`), and `scripts/probe_access.py` to exercise ALLOW and DENY as the three role users. The Compose project is named `uns-security-starter`, so containers, network, and volume group under the template name in Docker rather than under the folder name. Associated GitHub repository: [https://github.com/OWNER/REPO](https://github.com/OWNER/REPO) (replace with the real URL when available).
+This template folder includes `compose/docker-compose.yml`, a single Coreflux broker for testing the Rules locally (MQTT on `localhost:1883`, HUB on `http://localhost:8080`), and `scripts/probe_access.py` to exercise ALLOW and DENY as the three role users. The Compose project is named `uns-security-starter`, so containers, network, and volume group under the template name in Docker rather than under the folder name. Associated GitHub repository: [https://github.com/CorefluxCommunity/coreflux-templates/tree/main/templates/building-blocks/uns-security-starter](https://github.com/CorefluxCommunity/coreflux-templates/tree/main/templates/building-blocks/uns-security-starter).
 
-The Compose image remains pinned to the currently available broker `2.2.0`. It can
-syntax-test the 100+ priorities, but the 0–99 reservation itself must be verified
-against the next broker release when its image and documentation are published.
+The Compose image is pinned to `coreflux/coreflux-mqtt-broker:2.14.3` (full image, not
+distroless). That is the current versioned tag on Docker Hub as of 2026-08-26. The 0–99
+system Rule reservation must still be verified against the broker you actually run.
 
 Live behavioral testing for this template was done against a broker reporting
 `2.14.3-rc.62`, which is where the `PUBLISH MODEL` rule-governance, anonymous-deny, and
-default-priority findings in `VERIFICATION.md` come from. Reconcile the Compose pin with the broker you
-actually target before publication.
+default-priority findings in `VERIFICATION.md` come from. Confirm `$SYS/Coreflux/Version`
+if you change the pin.
 
 ## Topic and data dictionary
 
@@ -118,11 +118,10 @@ password, and filters. Those clients often subscribe to `#` by default, which Ru
 
 The broker also allows anonymous connections (`AnonymousLogin` is true by default),
 so a client with no credentials connects normally and is then denied by every
-`ELSE DENY` branch. A denied subscription returns SUBACK `0x80`, which many MQTT
-clients (HUB Data Viewer included) render as a silent empty tree. Verified on
-broker 2.14.3-rc.62: with the clean-tree subscribe Rule active, `root` and
-`dashboard` are granted and receive messages on `factory/#`, while an anonymous
-session receives `0x80` and nothing else. Reproduce it in HUB by opening Data
+`ELSE DENY` branch. HUB Data Viewer and other MQTT clients show that as a silent
+empty tree, not an error. Verified on broker 2.14.3-rc.62: with the clean-tree
+subscribe Rule active, `root` and `dashboard` receive messages on `factory/#`,
+while an unsigned-in session sees nothing. Reproduce it in HUB by opening Data
 Viewer without signing in, or by signing in as `engineer` and subscribing `#`.
 
 **The clean tree is silent while `raw/factory/#` still flows.** A `Publish` Rule over
@@ -332,7 +331,7 @@ The demo Rules enforce: dashboard subscribe-only on `factory/#`; `device_x` conf
 | Engineer writes outside factory raw and clean trees | `DenyDefaultPublish` (priority 200) |
 | Unauthorized subscribe on the clean factory tree | `AllowFactorySubscribe` (priority 140) |
 | Any client escapes its subscribe scope by asking one level broader (`raw/#`, `#`) | `DenyDefaultSubscribe` (200). Verified: without it, `device_x` on `raw/#` read device-y telemetry and on `#` read the whole clean tree |
-| Unauthenticated client reads or writes anything | Nine rules' `ELSE DENY` branch; an anonymous session matches no `USER IS` condition (verified: SUBACK `0x80`). **Not** covered on `factory/#` publish, where rule 6 must allow the Model's identity. Disable anonymous login to close it |
+| Unauthenticated client reads or writes anything | Nine rules' `ELSE DENY` branch; an anonymous session matches no `USER IS` condition (empty tree in Data Viewer). **Not** covered on `factory/#` publish, where rule 6 must allow the Model's identity. Disable anonymous login to close it |
 
 Two Rules in this table do not decide anything on broker 2.14.3-rc.62:
 `RestrictUserManagement` (100) and `ProtectSysSubscribe` (110) are pre-empted by the
